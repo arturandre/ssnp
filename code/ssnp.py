@@ -79,11 +79,15 @@ class SSNP():
         
         if n_classes == 2:
             n_units = 1
+            main_output_activation = 'sigmoid'
+            main_loss = 'binary_crossentropy'
         else:
             n_units = n_classes
+            main_output_activation = 'softmax'
+            main_loss = 'categorical_crossentropy'
 
         main_output = Dense(n_units,
-                            activation='softmax',
+                            activation=main_output_activation,
                             name='main_output',
                             kernel_initializer=self.init,
                             bias_initializer=Constant(self.bias))(x)
@@ -95,9 +99,10 @@ class SSNP():
                                 bias_initializer=Constant(self.bias))(x)
 
         model = Model(inputs=main_input, outputs=[main_output, decoder_output])
+        self.model = model 
 
         model.compile(optimizer=self.opt,
-                    loss={'main_output': 'categorical_crossentropy', 'decoder_output': 'binary_crossentropy'},
+                    loss={'main_output': main_loss, 'decoder_output': 'binary_crossentropy'},
                     metrics=['accuracy'])
 
         if self.patience > 0:
