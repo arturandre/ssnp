@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-- a few more clustering algos (we have two in the paper)
+- regularization (L2, dropout) e outros parametros menos importantes
 
-Adicionar em experiment1_direct.py:
--- DBSCAN e AffinityPropagation, para os 4 datasets
--- MDS e Isomap, com parametros default
-
-Veja "results_direct_dbscan_DATASETNAME" para o parâmetro eps do dbscan
+Rodar SSNP com GT e KMeans, MNIST,n_classes*2 variando:
+-- regularização L2 = [0.0, 0.1, 0.5, 1.0, 2.0]
+-- ativação interna (parametro act da classe SSNP): relu, sigmoid, tanh, leakyrelu
+-- init: glorot_uniform, he_uniform, e mais um
+-- early stopping: patience = [3, 5, 10]
 """
 
 import tensorflow as tf
@@ -35,6 +35,7 @@ warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 from glob import glob
+from time import perf_counter
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -107,25 +108,13 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
 
     data_dir ='../data'
-    data_dirs = ['mnist', 'fashionmnist', 'har', 'reuters']
+    data_dirs = ['mnist']
 
     epochs_dataset = {}
-    epochs_dataset['fashionmnist'] = 10
     epochs_dataset['mnist'] = 10
-    epochs_dataset['har'] = 10
-    epochs_dataset['reuters'] = 10
 
     classes_mult = {}
-    classes_mult['fashionmnist'] = 2
     classes_mult['mnist'] = 2
-    classes_mult['har'] = 2
-    classes_mult['reuters'] = 1
-
-    dbscan_eps = {}
-    dbscan_eps['fashionmnist'] = 5.6
-    dbscan_eps['mnist'] = 6.4
-    dbscan_eps['har'] = 2.2
-    dbscan_eps['reuters'] = 2.9
 
     for d in tqdm(data_dirs):
         dataset_name = d
@@ -151,59 +140,25 @@ if __name__ == '__main__':
 
         ssnpgt = ssnp.SSNP(epochs=epochs, verbose=verbose, patience=0, opt='adam', bottleneck_activation='linear')
         ssnpkm = ssnp.SSNP(epochs=epochs, verbose=verbose, patience=0, opt='adam', bottleneck_activation='linear')
-        ssnpag = ssnp.SSNP(epochs=epochs, verbose=verbose, patience=0, opt='adam', bottleneck_activation='linear')
-        ssnp_dbscan = ssnp.SSNP(epochs=epochs, verbose=verbose, patience=0, opt='adam', bottleneck_activation='linear')
-        ssnp_ap = ssnp.SSNP(epochs=epochs, verbose=verbose, patience=0, opt='adam', bottleneck_activation='linear')
-        tsne = TSNE(n_jobs=4, random_state=420)
-        umap = UMAP(random_state=420)
-        aep = ae.AutoencoderProjection(epochs=epochs, verbose=0)
-        # nnp = nnproj.NNProj(init=TSNE(n_jobs=4, random_state=420))
-        isomap = Isomap(n_neighbors=5, n_components=2) # default
-        mds = MDS(n_components=2, n_jobs=-1) # default
 
         projectors = [
             ssnpgt,
             ssnpkm,
-            ssnpag,
-            ssnp_dbscan,
-            ssnp_ap,
-            tsne,
-            umap,
-            aep,
-            #nnp,
-            isomap,
-            mds,
         ]
 
         c_algs = [
             None, #SSNP_GT
             "KMeans(n_clusters=n_classes)",
-            "AgglomerativeClustering(n_clusters=n_classes)",
-            "DBSCAN(eps=5)", # Default (0.5) turns everything into noise (-1). 5 works
-            "AffinityPropagation()", # Defaults?
-            None, # TSNE
-            None, # UMAP
-            None, # AutoencoderProjection
-            #None, # NNP
-            None, # Isomap
-            None, # MDS
         ]
 
         labels = [
             'SSNP-GT',
             'SSNP-KMeans',
-            'SSNP-AG',
-            'SSNP-DBSCAN',
-            'SSNP-AP',
-            'AE',
-            'TSNE',
-            'UMAP',
-            #'NNP',
-            'ISOMAP',
-            'MDS']
+            ]
 
         Xs = [] # Projected points
         Ds = [] # distances
+        Ts = [] # time elapsed
 
         # print("Fitting ssnp GT")
         # ssnpgt = ssnp.SSNP(epochs=epochs, verbose=verbose, patience=0, opt='adam', bottleneck_activation='linear')
@@ -213,6 +168,7 @@ if __name__ == '__main__':
         # Xs.append(X_ssnpgt)
 
         for P_, c, label in zip(projectors, c_algs, labels):
+            hist = None
             if c is not None:
                 if c.startswith('DBSCAN'):
                     c = f"DBSCAN(eps=dbscan_eps['{d}'])"
@@ -229,14 +185,28 @@ if __name__ == '__main__':
             except:
                 print(f"Fit_transform failed.")
                 print(f"Fitting {label}")
+                t0 = perf_counter()
                 try:
-                    P_.fit(X_train, y_)
+                    if isinstance(P_, ssnp.SSNP):
+                        hist = P_.fit(X_train, y_)
+                    else:
+                        P_.fit(X_train, y_)
                 except:
                     P_.fit(X_train)
+                elapsed_time = perf_counter() - t0
                 print(f"Transforming {label}")
                 X_ = P_.transform(X_train)
             Xs.append(X_)
             Ds.append(metrics.compute_distance_list(X_))
+            Ts.append(elapsed_time)
+            if hist is not None:
+                # convert the history.history dict to a pandas DataFrame:
+                # ref: https://stackoverflow.com/a/55901240/3562468
+                hist_df = pd.DataFrame(hist.history)
+                hist_csv_file = f'history-{label}.csv'
+                with open(hist_csv_file, mode='w') as f:
+                    hist_df.to_csv(f)
+            
 
         
         # print("Fitting TSNE")
@@ -255,8 +225,8 @@ if __name__ == '__main__':
         # print("Transforming NNProj")
         # X_nnp = nnp.transform(X_train)
 
-        for X_, label, D_ in zip(Xs, labels, Ds):
-            results.append((dataset_name, label,) + compute_all_metrics(X_train, X_, D_high, D_, y_train))
+        for X_, label, D_, T_ in zip(Xs, labels, Ds, Ts):
+            results.append((dataset_name, label, T_,) + compute_all_metrics(X_train, X_, D_high, D_, y_train))
             fname = os.path.join(output_dir, '{0}_{1}.png'.format(dataset_name, label))
             print(fname)
             plot(X_, y_train, fname)
@@ -266,6 +236,7 @@ if __name__ == '__main__':
 
     df = pd.DataFrame(results, columns=[    'dataset_name',
                                             'test_name',
+                                            'time_elapsed',
                                             'T_train',
                                             'C_train',
                                             'R_train',
@@ -303,7 +274,7 @@ if __name__ == '__main__':
 
 
     font = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSans.ttf", 50)
-    pri_images = ['SSNP-KMeans', 'SSNP-AG', 'SSNP-DBSCAN', 'SSNP-AP', 'AE', 'ISOMAP', 'MDS']
+    pri_images = ['SSNP-KMeans']
 
     images = glob(output_dir + '/*.png')    
     base = 2000

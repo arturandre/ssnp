@@ -1,3 +1,13 @@
+# results data (images, csv files, etc.)
+*.png
+*.csv
+results_direct*/
+*.out
+
+# intermediate scripts
+*.bak
+*_dbscan*.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

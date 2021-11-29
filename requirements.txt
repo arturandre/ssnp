@@ -4,3 +4,4 @@ wget==3.2
 tensorflow==2.4
 umap-learn==0.5.1
 MulticoreTSNE==0.1
+tqdm==4.62.3
