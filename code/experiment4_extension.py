@@ -195,9 +195,9 @@ if __name__ == '__main__':
             'SSNP-AG',
             'SSNP-DBSCAN',
             'SSNP-AP',
-            'AE',
-            'TSNE',
-            'UMAP',
+            'AE', # AE, TSNE e UMAP estão trocados!
+            'TSNE', # AE é TSNE, TSNE é UMAP e UMAP é AE
+            'UMAP', 
             #'NNP',
             'ISOMAP',
             'MDS']
